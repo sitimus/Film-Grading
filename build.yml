@@ -1,0 +1,195 @@
+name: Build APK
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Android project
+        run: |
+          mkdir -p app app/src/main app/src/main/assets app/src/main/java/com/filmgrader/app app/src/main/res/drawable app/src/main/res/mipmap-anydpi-v26 app/src/main/res/values
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+          rootProject.name = "FilmGrader"
+          include(":app")
+          EOF
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          EOF
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          EOF
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+          android {
+              namespace = "com.filmgrader.app"
+              compileSdk = 34
+              defaultConfig {
+                  applicationId = "com.filmgrader.app"
+                  minSdk = 29
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:label="Film Grader"
+                  android:theme="@style/AppTheme">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          cat > app/src/main/java/com/filmgrader/app/MainActivity.kt <<'EOF'
+          package com.filmgrader.app
+
+          import android.app.Activity
+          import android.content.ContentValues
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Bundle
+          import android.provider.MediaStore
+          import android.util.Base64
+          import android.webkit.JavascriptInterface
+          import android.webkit.ValueCallback
+          import android.webkit.WebChromeClient
+          import android.webkit.WebView
+          import android.widget.Toast
+
+          class MainActivity : Activity() {
+              private lateinit var web: WebView
+              private var chooser: ValueCallback<Array<Uri>>? = null
+
+              inner class Bridge {
+                  @JavascriptInterface
+                  fun save(dataUrl: String, name: String) {
+                      val msg = try {
+                          val bytes = Base64.decode(dataUrl.substringAfter(","), Base64.DEFAULT)
+                          val values = ContentValues().apply {
+                              put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                              put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                              put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/FilmGrader")
+                          }
+                          val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+                          contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
+                          "Saved to Pictures/FilmGrader"
+                      } catch (e: Exception) {
+                          "Save failed"
+                      }
+                      runOnUiThread { Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show() }
+                  }
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  web = WebView(this)
+                  setContentView(web)
+                  web.settings.javaScriptEnabled = true
+                  web.settings.domStorageEnabled = true
+                  web.addJavascriptInterface(Bridge(), "AndroidSave")
+                  web.webChromeClient = object : WebChromeClient() {
+                      override fun onShowFileChooser(
+                          view: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams
+                      ): Boolean {
+                          chooser?.onReceiveValue(null)
+                          chooser = cb
+                          return try {
+                              startActivityForResult(params.createIntent(), 1); true
+                          } catch (e: Exception) {
+                              chooser = null; false
+                          }
+                      }
+                  }
+                  web.loadUrl("file:///android_asset/index.html")
+              }
+
+              @Deprecated("Deprecated in Java")
+              override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+                  if (requestCode == 1) {
+                      chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+                      chooser = null
+                  } else super.onActivityResult(requestCode, resultCode, data)
+              }
+
+              @Deprecated("Deprecated in Java")
+              override fun onBackPressed() {
+                  if (web.canGoBack()) web.goBack() else super.onBackPressed()
+              }
+          }
+          EOF
+          cat > app/src/main/res/values/themes.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />
+          </resources>
+          EOF
+          cat > app/src/main/res/values/ic_launcher_background.xml <<'EOF'
+          <resources><color name="ic_launcher_background">#1A1A1A</color></resources>
+          EOF
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+          cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#F2F2F2" android:pathData="M34,42h40a4,4 0 0 1 4,4v26a4,4 0 0 1 -4,4h-40a4,4 0 0 1 -4,-4v-26a4,4 0 0 1 4,-4z" />
+              <path android:fillColor="#F2F2F2" android:pathData="M44,36h20l3,6h-26z" />
+              <path android:fillColor="#1A1A1A" android:pathData="M54,59m-11,0a11,11 0 1 0 22,0a11,11 0 1 0 -22,0" />
+              <path android:fillColor="#E8742C" android:pathData="M54,59m-7,0a7,7 0 1 0 14,0a7,7 0 1 0 -14,0" />
+              <path android:fillColor="#FFD9B8" android:pathData="M57,56m-2,0a2,2 0 1 0 4,0a2,2 0 1 0 -4,0" />
+          </vector>
+          EOF
+      - name: Add app page
+        run: |
+          python3 - <<'PY'
+          s=open('index.html').read()
+          old='a.href=cv.toDataURL("image/jpeg",.92);a.click()'
+          assert old in s
+          s=s.replace(old,'a.href=cv.toDataURL("image/jpeg",.92);if(window.AndroidSave){AndroidSave.save(a.href,a.download)}else{a.click()}')
+          open('app/src/main/assets/index.html','w').write(s)
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - run: gradle assembleDebug
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Film Grader build ${{ github.run_number }}
+          files: app/build/outputs/apk/debug/app-debug.apk

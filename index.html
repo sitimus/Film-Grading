@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Film Recipe Grader</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#fff;--fg:#1a1a1a;--mut:#777;--card:#f2f2f2;--acc:#1a1a1a;--accfg:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--fg:#f0f0f0;--mut:#999;--card:#242424;--acc:#f0f0f0;--accfg:#141414}}
+:root[data-theme="dark"]{--bg:#141414;--fg:#f0f0f0;--mut:#999;--card:#242424;--acc:#f0f0f0;--accfg:#141414}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui,"Segoe UI",sans-serif;padding:14px;max-width:560px;margin:0 auto}
+h1{font-size:20px;margin:4px 0 12px}
+.stage{background:var(--card);border-radius:14px;min-height:220px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+canvas{max-width:100%;max-height:60vh;display:none}
+.stage p{color:var(--mut);padding:20px;text-align:center;margin:0}
+button,label.btn{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:var(--card);color:var(--fg);cursor:pointer;display:inline-block}
+button.p,label.btn.p{background:var(--acc);color:var(--accfg)}
+.row{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+#chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch}
+#chips button{white-space:nowrap;flex:none;font-size:14px}
+#chips button.on{background:var(--acc);color:var(--accfg)}
+input[type=range]{width:100%}
+.lbl{display:flex;justify-content:space-between;font-size:13px;color:var(--mut)}
+.set{background:var(--card);border-radius:12px;padding:6px 12px;margin-top:8px;overflow-x:auto}
+.set div{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--bg)}
+.set span:first-child{color:var(--mut)}
+.note{font-size:12px;color:var(--mut);margin-top:10px}
+body,button,label,.stage{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#cmp{width:100%;padding:20px;font-size:17px;font-weight:600;touch-action:none;margin:0 0 10px;background:var(--acc);color:var(--accfg)}
+#cats{display:flex;gap:8px;overflow-x:auto;padding:4px 0}#cats button{flex:none;font-size:13px;padding:6px 12px}#cats button.on{background:var(--acc);color:var(--accfg)}
+</style><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#1a1a1a"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+</head><body>
+<h1>Film Recipe Grader</h1>
+<div class="stage"><p id="ph">Choose a photo to start. It stays on your device.</p><canvas id="cv"></canvas></div>
+<div class="row">
+ <label class="btn p" style="position:relative;overflow:hidden">Choose photo<input id="f" type="file" accept="image/*" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0"></label>
+ <button id="dl">Save JPEG</button>
+</div>
+<button id="cmp">Hold to compare</button>
+<div id="cats"></div>
+<div id="chips"></div>
+<div class="lbl"><span>Intensity</span><span id="iv">100%</span></div>
+<input id="int" type="range" min="0" max="100" value="100">
+<div class="lbl" style="margin-top:8px"><span>Grain</span><span id="gv">100%</span></div>
+<input id="gr" type="range" min="0" max="150" value="100">
+<div class="lbl" style="margin-top:8px"><span>Exposure</span><span id="ev">0</span></div>
+<input id="ex" type="range" min="-100" max="100" value="0">
+<div class="lbl" style="margin-top:8px"><span>Vignette</span><span id="vv">0%</span></div>
+<input id="vg" type="range" min="0" max="100" value="0">
+<div class="row" style="justify-content:space-between;align-items:center;margin-top:14px"><h3 id="rn" style="margin:0"></h3><button id="star"></button></div>
+<div class="set" id="set"></div>
+<p class="note">This is a software approximation of each look, not Fujifilm's actual processing. Use the settings above to compare on a real Fuji body.</p>
+<script>
+const R=[{"n":"Kodak Portra 400","cat":"Color negative","sim":"Classic Chrome","gr":"Weak, Small","cc":"Strong","fx":"Weak","wb":"Auto, R+2 B-4","dr":"DR200","hl":"-1","sh":"-1","co":"+2","sp":"-1","cl":"-2","nr":"-4","iso":"Auto up to 3200","ex":"0 to +2/3","look":{"c":-0.1,"s":-0.05,"w":0.12,"t":0,"f":0.12,"g":0.2,"sh":[20,30,30],"hi":[255,225,200]}},{"n":"Kodak Gold 200","cat":"Color negative","sim":"Classic Chrome","gr":"Strong, Small","cc":"Strong","fx":"Weak","wb":"Daylight, R+4 B-5","dr":"DR100","hl":"+1","sh":"+1","co":"+3","sp":"-1","cl":"-2","nr":"-4","iso":"Auto up to 1600","ex":"0 to +1","look":{"c":0.1,"s":0.1,"w":0.3,"t":-0.05,"f":0.08,"g":0.4,"hi":[255,215,150]}},{"n":"Kodak Ultramax 400","cat":"Color negative","sim":"Classic Chrome","gr":"Strong, Large","cc":"Strong","fx":"Off","wb":"Auto, R+3 B-3","dr":"DR200","hl":"0","sh":"0","co":"+3","sp":"0","cl":"0","nr":"-4","iso":"Auto up to 3200","ex":"+1/3","look":{"c":0.15,"s":0.15,"w":0.2,"f":0.05,"g":0.5,"hi":[255,220,170]}},{"n":"Kodak Ektar 100","cat":"Color negative","sim":"Velvia","gr":"Weak, Small","cc":"Strong","fx":"Strong","wb":"Daylight, R+1 B-2","dr":"DR100","hl":"+1","sh":"0","co":"+2","sp":"+1","cl":"+1","nr":"-3","iso":"Auto up to 800","ex":"0","look":{"c":0.2,"s":0.4,"w":0.05,"f":0,"g":0.15}},{"n":"Kodachrome 64","cat":"Slide","sim":"Classic Chrome","gr":"Strong, Small","cc":"Strong","fx":"Weak","wb":"Daylight, R+3 B-5","dr":"DR100","hl":"+2","sh":"+2","co":"+3","sp":"+1","cl":"0","nr":"-4","iso":"Auto up to 1600","ex":"-1/3","look":{"c":0.3,"s":0.25,"w":0.25,"t":-0.04,"f":0,"g":0.35,"sh":[10,20,30],"hi":[255,225,190]}},{"n":"Ektachrome 100","cat":"Slide","sim":"Provia","gr":"Weak, Small","cc":"Strong","fx":"Strong","wb":"Daylight, R-1 B+3","dr":"DR100","hl":"+1","sh":"0","co":"+2","sp":"+1","cl":"0","nr":"-3","iso":"Auto up to 800","ex":"0","look":{"c":0.15,"s":0.12,"w":-0.12,"f":0,"g":0.15}},{"n":"Fuji Superia 400","cat":"Color negative","sim":"Classic Chrome","gr":"Strong, Large","cc":"Strong","fx":"Strong","wb":"Auto, R-1 B+1 (greenish)","dr":"DR200","hl":"0","sh":"0","co":"+2","sp":"0","cl":"-1","nr":"-4","iso":"Auto up to 3200","ex":"0 to +2/3","look":{"c":0.05,"s":0.05,"w":-0.05,"t":-0.12,"f":0.1,"g":0.55,"sh":[10,35,30]}},{"n":"Fujicolor C200","cat":"Color negative","sim":"Classic Neg","gr":"Strong, Small","cc":"Strong","fx":"Strong","wb":"Auto, R+1 B-2","dr":"DR200","hl":"-1","sh":"-1","co":"+3","sp":"-1","cl":"-2","nr":"-4","iso":"Auto up to 3200","ex":"0","look":{"c":0.05,"s":0.1,"w":0.05,"t":-0.1,"f":0.12,"g":0.4,"sh":[0,40,40]}},{"n":"Fuji Pro 400H","cat":"Color negative","sim":"Pro Neg Std","gr":"Weak, Small","cc":"Weak","fx":"Weak","wb":"Daylight, R-2 B+2","dr":"DR400","hl":"-1","sh":"-2","co":"0","sp":"-2","cl":"-2","nr":"-4","iso":"Auto up to 3200","ex":"+2/3","look":{"c":-0.2,"s":-0.1,"w":-0.1,"t":-0.05,"f":0.18,"g":0.15,"sh":[30,55,55],"hi":[230,245,240]}},{"n":"Classic Negative","cat":"Color negative","sim":"Classic Neg","gr":"Weak, Small","cc":"Strong","fx":"Weak","wb":"Auto, R+3 B-5","dr":"DR200","hl":"+1","sh":"+4","co":"+4","sp":"+1","cl":"0","nr":"-4","iso":"Auto up to 6400","ex":"0 to +2/3","look":{"c":0.3,"s":0.05,"w":0.15,"t":-0.05,"f":0.05,"g":0.25,"sh":[10,40,50],"hi":[255,225,190]}},{"n":"Reala Ace","cat":"Color negative","sim":"Reala Ace","gr":"Off","cc":"Strong","fx":"Off","wb":"Auto, R-1 B+0","dr":"DR200","hl":"0","sh":"0","co":"0","sp":"0","cl":"0","nr":"-2","iso":"Auto up to 6400","ex":"0","look":{"c":0.05,"s":0,"w":0,"f":0,"g":0}},{"n":"Nostalgic Negative","cat":"Color negative","sim":"Nostalgic Neg","gr":"Weak, Large","cc":"Weak","fx":"Weak","wb":"Daylight, R+2 B-3","dr":"DR200","hl":"-1","sh":"+1","co":"+2","sp":"-1","cl":"-2","nr":"-4","iso":"Auto up to 3200","ex":"0","look":{"c":0.05,"s":0.05,"w":0.22,"t":0.03,"f":0.15,"g":0.3,"sh":[40,30,30],"hi":[255,215,170]}},{"n":"Velvia 50","cat":"Slide","sim":"Velvia","gr":"Off","cc":"Strong","fx":"Strong","wb":"Daylight, R+0 B+0","dr":"DR100","hl":"+1","sh":"+1","co":"+2","sp":"+1","cl":"0","nr":"-2","iso":"Auto up to 800","ex":"-1/3","look":{"c":0.3,"s":0.5,"w":0,"f":0,"g":0}},{"n":"Provia 100F","cat":"Slide","sim":"Provia","gr":"Off","cc":"Weak","fx":"Off","wb":"Auto, R+0 B+0","dr":"DR100","hl":"0","sh":"0","co":"0","sp":"0","cl":"0","nr":"-2","iso":"Auto up to 3200","ex":"0","look":{"c":0.08,"s":0.05,"w":0,"f":0,"g":0}},{"n":"Astia Soft","cat":"Slide","sim":"Astia","gr":"Weak, Small","cc":"Off","fx":"Off","wb":"Auto, R+1 B-1","dr":"DR400","hl":"-2","sh":"-2","co":"+1","sp":"-2","cl":"-2","nr":"-4","iso":"Auto up to 3200","ex":"+1/3","look":{"c":-0.2,"s":-0.05,"w":0.06,"f":0.12,"g":0.12}},{"n":"Eterna Cinema","cat":"Cinema","sim":"Eterna","gr":"Weak, Small","cc":"Strong","fx":"Weak","wb":"Auto, R+1 B-2","dr":"DR400","hl":"-1","sh":"-2","co":"-2","sp":"-1","cl":"-2","nr":"-4","iso":"Auto up to 6400","ex":"0","look":{"c":-0.1,"s":-0.25,"w":0.05,"t":0,"f":0.2,"g":0.2,"sh":[20,45,50],"hi":[255,225,200]}},{"n":"Cinestill 800T","cat":"Cinema","sim":"Eterna","gr":"Strong, Large","cc":"Strong","fx":"Strong","wb":"Fluorescent 3, R-2 B+2","dr":"DR200","hl":"0","sh":"+2","co":"+2","sp":"0","cl":"-2","nr":"-4","iso":"Auto up to 12800","ex":"-1/3 to +1/3","look":{"c":0.1,"s":0.0,"w":-0.2,"t":0.05,"f":0.1,"g":0.6,"sh":[0,50,60],"hi":[255,150,130]}},{"n":"Bleach Bypass","cat":"Cinema","sim":"Eterna Bleach Bypass","gr":"Strong, Small","cc":"Strong","fx":"Strong","wb":"Auto, R+0 B+0","dr":"DR200","hl":"0","sh":"+2","co":"-2","sp":"+1","cl":"+1","nr":"-4","iso":"Auto up to 6400","ex":"-1/3","look":{"c":0.35,"s":-0.5,"w":0,"f":0.05,"g":0.4}},{"n":"Teal & Orange Moody","cat":"Creative","sim":"Classic Chrome","gr":"Weak, Large","cc":"Strong","fx":"Strong","wb":"Daylight, R+4 B-4","dr":"DR200","hl":"+1","sh":"+2","co":"+3","sp":"0","cl":"0","nr":"-4","iso":"Auto up to 3200","ex":"-2/3","look":{"c":0.25,"s":0.1,"w":0.1,"f":0.08,"g":0.25,"sh":[0,60,70],"hi":[255,190,140]}},{"n":"Kodak Tri-X 400","cat":"B&W","sim":"Acros + Yellow","gr":"Strong, Large","cc":"Off","fx":"Off","wb":"Auto","dr":"DR200","hl":"+1","sh":"+2","co":"n/a","sp":"+2","cl":"+2","nr":"-4","iso":"Auto up to 12800","ex":"0 to +2/3","look":{"c":0.35,"s":-1,"f":0.05,"g":0.8,"bw":1}},{"n":"Ilford HP5 Plus","cat":"B&W","sim":"Acros + Green","gr":"Strong, Large","cc":"Off","fx":"Off","wb":"Auto","dr":"DR400","hl":"0","sh":"0","co":"n/a","sp":"0","cl":"+1","nr":"-4","iso":"Auto up to 6400","ex":"0 to +1","look":{"c":0.1,"s":-1,"f":0.1,"g":0.7,"bw":1}},{"n":"Acros Red Filter","cat":"B&W","sim":"Acros + Red","gr":"Weak, Small","cc":"Off","fx":"Off","wb":"Auto","dr":"DR200","hl":"+1","sh":"+1","co":"n/a","sp":"+1","cl":"+1","nr":"-4","iso":"Auto up to 3200","ex":"-1/3","look":{"c":0.4,"s":-1,"f":0,"g":0.25,"bw":1}},{"n":"Sepia Toned","cat":"B&W","sim":"Monochrome (Mono Color: WC +10, MG 0)","gr":"Weak, Small","cc":"Off","fx":"Off","wb":"Auto","dr":"DR200","hl":"0","sh":"0","co":"n/a","sp":"0","cl":"0","nr":"-4","iso":"Auto up to 3200","ex":"0","look":{"c":0.1,"s":-1,"f":0.15,"g":0.3,"bw":1,"tone":[112,66,20]}}],F=[["Film Simulation", "sim"], ["Grain Effect", "gr"], ["Color Chrome Effect", "cc"], ["Color Chrome FX Blue", "fx"], ["White Balance", "wb"], ["Dynamic Range", "dr"], ["Highlight Tone", "hl"], ["Shadow Tone", "sh"], ["Color", "co"], ["Sharpness", "sp"], ["Clarity", "cl"], ["Noise Reduction", "nr"], ["ISO", "iso"], ["Exposure Comp.", "ex"]];
+const $=id=>document.getElementById(id);
+const cv=$("cv"),ctx=cv.getContext("2d",{willReadFrequently:true});
+let src=null,cur=0,seed=[];
+const chips=$("chips");
+let cat="All";const fav=new Set();
+const cats=["All","★ Favorites",...new Set(R.map(r=>r.cat))];
+function buildChips(){chips.innerHTML="";R.forEach((r,i)=>{if(cat=="★ Favorites"?!fav.has(i):(cat!="All"&&r.cat!=cat))return;const b=document.createElement("button");b.textContent=(fav.has(i)?"★ ":"")+r.n;b.dataset.i=i;b.onclick=()=>{cur=i;render()};chips.appendChild(b)});markOn()}
+function markOn(){[...chips.children].forEach(b=>b.classList.toggle("on",b.dataset.i==cur))}
+const cb=$("cats");cats.forEach(c=>{const b=document.createElement("button");b.textContent=c;b.onclick=()=>{cat=c;[...cb.children].forEach(x=>x.classList.toggle("on",x==b));buildChips()};if(c=="All")b.classList.add("on");cb.appendChild(b)});
+buildChips();
+function showSettings(){const r=R[cur];$("rn").textContent=r.n;
+ $("set").innerHTML=F.map(([k,v])=>"<div><span>"+k+"</span><span>"+r[v]+"</span></div>").join("");
+ markOn();$("star").textContent=fav.has(cur)?"★ Favorited":"☆ Favorite"}
+function clamp(x){return x<0?0:x>255?255:x}
+function grade(){
+ if(!src)return;
+ const L=R[cur].look,k=$("int").value/100,gk=$("gr").value/100;
+ ctx.drawImage(src,0,0,cv.width,cv.height);
+ const im=ctx.getImageData(0,0,cv.width,cv.height),d=im.data;
+ const c=1+(L.c||0)*k,sat=1+(L.s||0)*k,w=(L.w||0)*k*40,t=(L.t||0)*k*30,f=(L.f||0)*k*40;
+ const sh=L.sh,hi=L.hi,tone=L.tone,gs=(L.g||0)*gk*40,ex=Math.pow(2,$("ex").value/100),vg=$("vg").value/100,W=cv.width,Hh=cv.height;
+ for(let i=0,p=0;i<d.length;i+=4,p++){
+  let r=d[i]*ex,g=d[i+1]*ex,b=d[i+2]*ex;
+  r=(r-128)*c+128;g=(g-128)*c+128;b=(b-128)*c+128;
+  let y=.299*r+.587*g+.114*b;
+  if(L.bw){r=g=b=y}else{r=y+(r-y)*sat;g=y+(g-y)*sat;b=y+(b-y)*sat}
+  r+=w;b-=w;g-=t;
+  y=(.299*r+.587*g+.114*b)/255;
+  if(y<0)y=0;if(y>1)y=1;
+  if(sh){const a=Math.pow(1-y,2)*.35*k;r+=(sh[0]-r)*a;g+=(sh[1]-g)*a;b+=(sh[2]-b)*a}
+  if(hi){const a=Math.pow(y,2)*.3*k;r+=(hi[0]-r)*a;g+=(hi[1]-g)*a;b+=(hi[2]-b)*a}
+  if(f){r=f+r*(1-f/255);g=f+g*(1-f/255);b=f+b*(1-f/255)}
+  if(tone){const m=(.299*r+.587*g+.114*b)/255;r=r*(1-k)+tone[0]*m*1.9*k;g=g*(1-k)+tone[1]*m*1.9*k;b=b*(1-k)+tone[2]*m*1.9*k}
+  if(gs){const n=(seed[p%seed.length])*gs*(1-Math.abs(y-.5)*.8);r+=n;g+=n;b+=n}
+  if(vg){const vx=(p%W)/W-.5,vy=Math.floor(p/W)/Hh-.5,m=1-vg*Math.min(1,(vx*vx+vy*vy)*2.2);r*=m;g*=m;b*=m}
+  d[i]=clamp(r);d[i+1]=clamp(g);d[i+2]=clamp(b)}
+ ctx.putImageData(im,0,0)}
+function render(){showSettings();grade()}
+$("f").onchange=e=>{const file=e.target.files[0];if(!file)return;
+ const img=new Image();img.onload=()=>{const s=Math.min(1,1600/Math.max(img.width,img.height));
+  cv.width=Math.round(img.width*s);cv.height=Math.round(img.height*s);src=img;
+  seed=new Float32Array(65536);for(let i=0;i<seed.length;i++)seed[i]=(Math.random()+Math.random()+Math.random()-1.5);
+  cv.style.display="block";$("ph").style.display="none";grade()};
+ img.src=URL.createObjectURL(file)};
+["input"].forEach(ev=>{$("int").addEventListener(ev,()=>{$("iv").textContent=$("int").value+"%";grade()});
+ $("gr").addEventListener(ev,()=>{$("gv").textContent=$("gr").value+"%";grade()})});
+$("ex").addEventListener("input",()=>{const v=$("ex").value/100;$("ev").textContent=(v>0?"+":"")+v.toFixed(1)+" EV";grade()});
+$("vg").addEventListener("input",()=>{$("vv").textContent=$("vg").value+"%";grade()});
+$("star").onclick=()=>{fav.has(cur)?fav.delete(cur):fav.add(cur);buildChips();showSettings()};
+const show=()=>{if(src)ctx.drawImage(src,0,0,cv.width,cv.height)};
+$("cmp").addEventListener("pointerdown",e=>{e.preventDefault();try{$("cmp").setPointerCapture(e.pointerId)}catch(_){}show()});
+$("cmp").addEventListener("contextmenu",e=>e.preventDefault());
+["pointerup","pointerleave","pointercancel"].forEach(ev=>$("cmp").addEventListener(ev,grade));
+$("dl").onclick=()=>{if(!src)return;const a=document.createElement("a");a.download=R[cur].n.replace(/\W+/g,"_")+".jpg";a.href=cv.toDataURL("image/jpeg",.92);a.click()};
+showSettings();
+</script><script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{})}</script></body></html>
